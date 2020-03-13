@@ -248,6 +248,3 @@ for region in sorted(activities['region_name'].unique()):
             row_cells[2].text=str(activities_no['store_name'].values[i])
     document.add_paragraph(text='\n')
 document.save('output/Maxbo Report.docx')
-
-hghhgvh
-jvjhvj
