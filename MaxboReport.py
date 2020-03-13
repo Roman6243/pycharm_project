@@ -31,9 +31,9 @@ stores_using_system=data[data['active_today']][['store_name', 'region_name']].dr
 stores_not_using_system=data[~data['store_name'].isin(stores_using_system['store_name'])][['store_name', 'region_name']].drop_duplicates().assign(is_active='no') # all stores which not used system even once
 activities=pd.concat([stores_using_system, stores_not_using_system], axis=0).reset_index(drop=True)
 
-print('Average use of the system (per user/per store/per region/per day): ')
-n_usage_per_user_store_day=data[data['session_count']>0].groupby(['region_name', 'store_name'])['session_count'].mean().reset_index().\
-    groupby('region_name').mean().reset_index().rename(columns={'session_count':'n_user_store_day'})
+print('Average use of the system (per user/per store/per region/per week): ')
+n_usage_per_user_store_day=data[data['session_count']>0].groupby(['region_name', 'store_name', 'date'])['session_count'].mean().reset_index().\
+                            groupby('region_name').mean().reset_index().rename(columns={'session_count':'n_user_store_day'})
 n_not_active_stores=stores_not_using_system.groupby('region_name')['store_name'].count().reset_index().sort_values(by='region_name').rename(columns={'store_name':'n_not_active_stores'})
 data_table_2=pd.merge(n_usage_per_user_store_day, n_not_active_stores, on='region_name')
 data_table_2['score_goal']=data_table_2['n_user_store_day']-2
@@ -47,6 +47,8 @@ data_table_2.loc[data_table_2['index']=='n_not_active_stores', 'index'] = 'Numbe
 data_table_2.loc[data_table_2['index']=='n_user_store_day', 'index'] = 'Average use per day (nr of times)'
 data_table_2.loc[data_table_2['index']=='score_goal', 'index'] = 'Score against goal'
 data_table_2.rename(columns={'index': 'Region'}, inplace=True)
+data_table_2['Region'] = pd.Categorical(data_table_2['Region'], ["Average use per day (nr of times)", 'Goal', "Score against goal", "Number of stores that have not been using the system"])
+data_table_2.sort_values('Region', inplace=True)
 
 # make a shading for particular cells in table
 def shade_cells(cells, shade):
@@ -81,6 +83,7 @@ working_hours.columns = ['store_name', 'F_From', 'F_To', 'MT_From', 'MT_To', 'S_
 
 start = '2020-01-06'
 end = '2020-03-07'
+
 date_start=pd.date_range(start=start, end=end, freq='W-MON').strftime(date_format='%Y-%m-%d')
 date_end=pd.date_range(start=start, end=end, freq='W-SAT').strftime(date_format='%Y-%m-%d')
 
@@ -121,8 +124,7 @@ for next_date in range(len(date_start)):
     data_traffic['datetime'] = pd.to_datetime(data_traffic['datetime'], format = '%Y-%m-%dT%H:%M')
     data_traffic[['store_id', 'type_counter', 'nr_counter', 'ip']] = data_traffic['counter'].astype(str).str.split('_', expand = True)
     # store renaming
-    for r in range(len(store_rename)):
-        data_traffic.loc[data_traffic['store_name'] == store_rename['It is'][r], 'store_name'] = store_rename['Should be'][r]
+    for r in range(len(store_rename)):  data_traffic.loc[data_traffic['store_name'] == store_rename['It is'][r], 'store_name'] = store_rename['Should be'][r]
     data_traffic['hour'] = data_traffic['datetime'].dt.hour
     data_traffic['weekday'] = data_traffic['datetime'].dt.weekday
     data_traffic['year'] = data_traffic['datetime'].dt.year
@@ -144,8 +146,7 @@ for next_date in range(len(date_start)):
     print('The start point is %s'%date_start[next_date])
 
 data_traffic =  data_traffic_all[['people_in','store_name', 'type_counter', 'hour', 'year', 'week', 'date', 'weekdayname','counters_used', 'calendar_year']].dropna() # as Maxbo Nittedal has counter 172.16.164.123 which is not defined
-data_sales =  data_sales_all[['count','date', 'hour', 'items', 'store_name', 'type_sales', 'value']]
-data_sales_date = data_sales.groupby(['store_name', 'date', 'type_sales'])['count'].sum().reset_index()
+data_sales_date = data_sales_all.groupby(['store_name', 'date', 'type_sales'])['count'].sum().reset_index()
 data_sales_date["day_name"] = data_sales_date['date'].dt.weekday_name
 data_sales_date = data_sales_date[data_sales_date['day_name'] != "Sunday"] # stores are closed on Sunday's
 data_sales_date = pd.pivot_table(data_sales_date, index=['store_name', 'date'], columns='type_sales', fill_value=0).reset_index()
@@ -161,25 +162,31 @@ data_traffic_date = data_traffic[data_traffic['counters_used'] == 'yes'].groupby
 conversion_rate = pd.merge(data_sales_date, data_traffic_date, left_on=['store', 'date'], right_on=['store_name', 'date'], how='inner')
 # traffic data contains NA's
 # explanation: transaction data were send before people counters were installed ['MAXBO SØRUMSAND', 'MAXBO IDEBYGG AS', 'MAXBO MANDAL', 'MAXBO NOTODDEN', 'MAXBO SKANSEN', 'MAXBO SLEMMESTAD', 'MAXBO TRYSIL']
-conversion_rate['conversion_rate'] = round(conversion_rate['transactions']/conversion_rate['people_in'], 4) # contains NANs
 conversion_rate = conversion_rate.replace(np.inf, np.nan).dropna() # as the number transactions and visitors are equal zero we must delete them!
+conversion_rate=conversion_rate[conversion_rate['people_in'] != 0]
 conversion_rate['week'] = conversion_rate['date'].dt.week
+conversion_rate['month'] = conversion_rate['date'].dt.strftime('%B')
 conversion_rate = pd.merge(conversion_rate, calendar_weeks, on='date', how='left')
-conversion_rate = conversion_rate.groupby(['store', 'week', 'calendar_year'], as_index = False).agg({"conversion_rate":"mean", "people_in": "sum"}).sort_values(['calendar_year', 'week'])
-conversion_rate_last_weeks = conversion_rate.groupby(['store', 'week', 'calendar_year']).mean().\
-    reset_index().sort_values(['calendar_year', 'week']).groupby('store').tail(n=10).\
-    groupby('store').head(n=9).groupby('store')['people_in', 'conversion_rate'].mean().reset_index().\
-    rename(columns = {'people_in' : 'traffic_last_weeks',  'conversion_rate':'conversion_rate_last_weeks'})
-conversion_rate_last_weeks['traffic_last_weeks'] = round(conversion_rate_last_weeks['traffic_last_weeks'], 0)
-conversion_rate_last_weeks['conversion_rate_last_weeks'] = round(conversion_rate_last_weeks['conversion_rate_last_weeks'], 4)
-conversion_rate_current_week = conversion_rate.groupby(['store', 'week', 'calendar_year']).mean().reset_index().sort_values(['calendar_year', 'week']).groupby(['store']).tail(n=1).rename(columns = {'people_in' : 'traffic_current_week',  'conversion_rate':'conversion_rate_current_week'})
-conversion_rate_current_week['conversion_rate_current_week'] = round(conversion_rate_current_week['conversion_rate_current_week'], 4)
-store_development = pd.merge(conversion_rate_current_week, conversion_rate_last_weeks, on='store')
-store_development['conversion_rate_dev'] = round((store_development['conversion_rate_current_week'] - store_development['conversion_rate_last_weeks'])/store_development['conversion_rate_last_weeks'] , 4)
-store_development['traffic_dev'] = round((store_development['traffic_current_week'] - store_development['traffic_last_weeks'])/store_development['traffic_last_weeks'] , 4)
-store_development = pd.merge(store_development, sales_group, left_on='store', right_on='store_name')
-store_development=store_development[['store', 'conversion_rate_current_week', 'conversion_rate_last_weeks', 'conversion_rate_dev']]
+conversion_rate = conversion_rate.groupby(['store', 'week', 'calendar_year', 'month'], as_index = False).agg({"transactions":"sum", "people_in": "sum"}).sort_values(['calendar_year', 'week'])
+conversion_rate['conversion_rate'] = round(conversion_rate['transactions']/conversion_rate['people_in'], 4) # contains NANs
 
+
+today_week=10
+today_month='March'
+cumulative_weeks="Conversion rate (week 1-"+str(today_week-1)+')'
+current_week="Conversion rate (week "+str(today_week)+')'
+cumulative_months="Conversion rate (Jan-Feb)"
+current_month="Conversion rate (Mar)"
+
+conversion_rate_last_weeks = conversion_rate[conversion_rate['week'] < today_week][['store','conversion_rate']].groupby('store').mean().reset_index().rename(columns={'conversion_rate': cumulative_weeks})
+conversion_rate_last_months = conversion_rate[conversion_rate['month'] != today_month].groupby('store')['conversion_rate'].mean().reset_index().rename(columns={'conversion_rate': cumulative_months})
+conversion_rate_current_week = conversion_rate[conversion_rate['week'] == today_week][['store','conversion_rate']].rename(columns={'conversion_rate': current_week})
+conversion_rate_current_month = conversion_rate[conversion_rate['month'] == today_month][['store','conversion_rate']].rename(columns={'conversion_rate': current_month})
+store_development = pd.merge(conversion_rate_current_week, conversion_rate_last_weeks, on='store')
+store_development = pd.merge(store_development, conversion_rate_last_months, on='store')
+store_development = pd.merge(store_development, conversion_rate_current_month, on='store')
+store_development['Conversion rate dev.'] = round((store_development[current_week] - store_development[cumulative_weeks])/store_development[cumulative_weeks], 4)
+store_development=store_development.sort_values(by=current_week, ascending=False).rename(columns={'store': 'Store'})
 
 document = Document('input/template.docx')
 # define the font family and size for entire file
@@ -188,12 +195,11 @@ font = style.font
 font.name = 'Avenir Book'
 font.size = Pt(10)
 # generate stores conversion rate development
-table = document.add_table(rows=1, cols=4, style='rm')
+table = document.add_table(rows=1, cols=6, style='rm')
 col_names=store_development.columns
 header_cells = table.rows[0].cells
 for k in range(len(col_names)):
     header_cells[k].paragraphs[0].add_run(col_names[k]).bold=True
-# shade_cells([table.cell(0, 0), table.cell(0, 1), table.cell(0, 2), table.cell(0, 3), table.cell(0, 4), table.cell(0, 5), table.cell(0, 6)], "#002060")
 for i in range(len(store_development)):
     row_cells = table.add_row().cells
     for d in range(len(col_names)):
@@ -209,7 +215,6 @@ col_names=data_table_2.columns
 header_cells = table.rows[0].cells
 for k in range(len(col_names)):
     header_cells[k].paragraphs[0].add_run(col_names[k]).bold=True
-shade_cells([table.cell(0, 0), table.cell(0, 1), table.cell(0, 2), table.cell(0, 3), table.cell(0, 4), table.cell(0, 5), table.cell(0, 6)], "#002060")
 for i in range(len(data_table_2)):
     row_cells = table.add_row().cells
     for d in range(len(col_names)):
@@ -227,13 +232,13 @@ for region in sorted(activities['region_name'].unique()):
     activities_no=activities_region[activities_region['is_active']=='no']
 
     document.add_paragraph(text=region)
-    table = document.add_table(rows=1, cols=3, style='rm')
+    table = document.add_table(rows=1, cols=3, style='rm_simple')
     header_cells = table.rows[0].cells
     header_cells[0].text = ''
     header_cells[1].paragraphs[0].add_run('Which stores have been using the system').bold=True
     header_cells[2].paragraphs[0].add_run('Which stores have not been using the system').bold=True
     shade_cells([table.cell(0, 1)], "#00b050")
-    shade_cells([table.cell(0, 2)], "#c00000")
+    shade_cells([table.cell(0, 2)], "#3d393a")
     for i in range(max([len(activities_no), len(activities_yes)])):
         row_cells = table.add_row().cells
         row_cells[0].text=str(i+1)
