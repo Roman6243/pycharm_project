@@ -249,3 +249,5 @@ for region in sorted(activities['region_name'].unique()):
     document.add_paragraph(text='\n')
 document.save('output/Maxbo Report.docx')
 
+hghhgvh
+jvjhvj
