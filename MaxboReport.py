@@ -11,7 +11,7 @@ os.chdir(r'C:\Users\PC1\Dropbox (BigBlue&Company)\ETC Insight\Projects\Maxbo Rep
 pd.set_option('display.max_columns', 30)
 pd.set_option('display.width', 1000)
 
-last_week_dates = pd.date_range(start='2020-03-02', end='2020-03-07', freq='D').strftime(date_format='%Y-%m-%d')
+last_week_dates = pd.date_range(start='2020-03-09', end='2020-03-14', freq='D').strftime(date_format='%Y-%m-%d')
 data = pd.DataFrame()
 for date in last_week_dates:
     activity=requests.get("https://maxbo.link.express/external/api/v2/5d02982d29512bcc1729bb3964efb830/activity/query/?activity_date="+date+"T00:00:00&store_alias=ALL").json()
@@ -32,8 +32,8 @@ stores_not_using_system=data[~data['store_name'].isin(stores_using_system['store
 activities=pd.concat([stores_using_system, stores_not_using_system], axis=0).reset_index(drop=True)
 
 print('Average use of the system (per user/per store/per region/per week): ')
-n_usage_per_user_store_day=data[data['session_count']>0].groupby(['region_name', 'store_name', 'date'])['session_count'].mean().reset_index().\
-                            groupby('region_name').mean().reset_index().rename(columns={'session_count':'n_user_store_day'})
+n_usage_per_user_store_day=(data[data['session_count']>0].groupby(['region_name', 'store_name', 'date'])['session_count'].mean().reset_index()
+                            .groupby('region_name').mean().reset_index().rename(columns={'session_count':'n_user_store_day'}))
 n_not_active_stores=stores_not_using_system.groupby('region_name')['store_name'].count().reset_index().sort_values(by='region_name').rename(columns={'store_name':'n_not_active_stores'})
 data_table_2=pd.merge(n_usage_per_user_store_day, n_not_active_stores, on='region_name')
 data_table_2['score_goal']=data_table_2['n_user_store_day']-2
@@ -82,7 +82,7 @@ working_hours.columns = ['store_name', 'F_From', 'F_To', 'MT_From', 'MT_To', 'S_
 # working hours formatting end
 
 start = '2020-01-06'
-end = '2020-03-07'
+end = '2020-03-14'
 
 date_start=pd.date_range(start=start, end=end, freq='W-MON').strftime(date_format='%Y-%m-%d')
 date_end=pd.date_range(start=start, end=end, freq='W-SAT').strftime(date_format='%Y-%m-%d')
@@ -130,7 +130,7 @@ for next_date in range(len(date_start)):
     data_traffic['year'] = data_traffic['datetime'].dt.year
     data_traffic['week'] = data_traffic['datetime'].dt.weekofyear
     data_traffic['date'] = data_traffic['datetime'].dt.normalize()
-    data_traffic['weekdayname'] = data_traffic['datetime'].dt.weekday_name
+    data_traffic['weekdayname'] = data_traffic['datetime'].dt.strftime('%A')
     data_traffic = pd.merge(data_traffic, working_hours, on = 'store_name')
     # # select only work hours
     data_traffic.loc[(data_traffic['hour'] >= data_traffic['MT_From']) & (data_traffic['hour'] <= data_traffic['MT_To']) &
@@ -147,7 +147,7 @@ for next_date in range(len(date_start)):
 
 data_traffic =  data_traffic_all[['people_in','store_name', 'type_counter', 'hour', 'year', 'week', 'date', 'weekdayname','counters_used', 'calendar_year']].dropna() # as Maxbo Nittedal has counter 172.16.164.123 which is not defined
 data_sales_date = data_sales_all.groupby(['store_name', 'date', 'type_sales'])['count'].sum().reset_index()
-data_sales_date["day_name"] = data_sales_date['date'].dt.weekday_name
+data_sales_date["day_name"] = data_sales_date['date'].dt.strftime('%A')
 data_sales_date = data_sales_date[data_sales_date['day_name'] != "Sunday"] # stores are closed on Sunday's
 data_sales_date = pd.pivot_table(data_sales_date, index=['store_name', 'date'], columns='type_sales', fill_value=0).reset_index()
 data_sales_date.columns = data_sales_date.columns.droplevel()
@@ -170,8 +170,7 @@ conversion_rate = pd.merge(conversion_rate, calendar_weeks, on='date', how='left
 conversion_rate = conversion_rate.groupby(['store', 'week', 'calendar_year', 'month'], as_index = False).agg({"transactions":"sum", "people_in": "sum"}).sort_values(['calendar_year', 'week'])
 conversion_rate['conversion_rate'] = round(conversion_rate['transactions']/conversion_rate['people_in'], 4) # contains NANs
 
-
-today_week=10
+today_week=11
 today_month='March'
 cumulative_weeks="Conversion rate (week 1-"+str(today_week-1)+')'
 current_week="Conversion rate (week "+str(today_week)+')'
@@ -181,7 +180,7 @@ current_month="Conversion rate (Mar)"
 conversion_rate_last_weeks = conversion_rate[conversion_rate['week'] < today_week][['store','conversion_rate']].groupby('store').mean().reset_index().rename(columns={'conversion_rate': cumulative_weeks})
 conversion_rate_last_months = conversion_rate[conversion_rate['month'] != today_month].groupby('store')['conversion_rate'].mean().reset_index().rename(columns={'conversion_rate': cumulative_months})
 conversion_rate_current_week = conversion_rate[conversion_rate['week'] == today_week][['store','conversion_rate']].rename(columns={'conversion_rate': current_week})
-conversion_rate_current_month = conversion_rate[conversion_rate['month'] == today_month][['store','conversion_rate']].rename(columns={'conversion_rate': current_month})
+conversion_rate_current_month = conversion_rate[conversion_rate['month'] == today_month].groupby(['store'])['conversion_rate'].mean().reset_index().rename(columns={'conversion_rate': current_month})
 store_development = pd.merge(conversion_rate_current_week, conversion_rate_last_weeks, on='store')
 store_development = pd.merge(store_development, conversion_rate_last_months, on='store')
 store_development = pd.merge(store_development, conversion_rate_current_month, on='store')
@@ -247,4 +246,4 @@ for region in sorted(activities['region_name'].unique()):
         if i< len(activities_no):
             row_cells[2].text=str(activities_no['store_name'].values[i])
     document.add_paragraph(text='\n')
-document.save('output/Maxbo Report.docx')
+document.save('output/Maxbo Report Week 11.docx')
