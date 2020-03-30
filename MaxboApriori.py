@@ -46,7 +46,9 @@ original_name("Jordan")
 
 # return all transactions, in which at least once product from current supplier present
 def choose_tran_supplier(vendor_name):
-    # choose only transactions contains at least one current vendor's products
+    """
+    choose only transactions contains at least one current vendor's products
+    """
     list_ids=data[(data['vendor_name']==vendor_name) & (data['category']=='Maling')]['id_tr'].unique()
     data_supplier=data[data['id_tr'].isin(list_ids)]
     return data_supplier

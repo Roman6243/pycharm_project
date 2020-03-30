@@ -39,12 +39,11 @@ data['EAN/PLU'] = data['EAN/PLU'].astype(np.int64)
 data['Best.nr'] = data['Best.nr'].replace(np.nan, 0).astype(np.int64)
 data.loc[(data['product'] == 'ALPEBRØD GROVT 570G')|(data['product'] == 'ALPEBRØD 570G JACOBS UTVALGTE'), 'product'] = 'ALPEBRØD HALVSTEKT 600G JACOBS' # eliminate product name "ALPEBRØD GROVT 570G"
 data[['turnover', 'number_products_sold', 'number_products_sold_compagine', 'westage']] = data[['turnover', 'number_products_sold', 'number_products_sold_compagine', 'westage']].replace(np.nan, 0)
-# data_bread = data[data['category'] == 'Ferske bakerivarer'].copy()
 
-data_bread = data[data['category'] == 'Ferske bakerivarer'].reset_index(drop=True) # the same result as code above
+data_bread = data[data['category'] == 'Ferske bakerivarer'].reset_index(drop=True)
 # show which products were in compagin
-products_in_compagin_2018=pd.merge(data_bread[['Best.nr', 'product', 'year', 'week']], weekly_compagine_2018, on=['Best.nr', 'year', 'week'], how='right').drop_duplicates().sort_values(by='week').\
-    dropna()[['product_x', 'year', 'week']].rename(columns={'product_x':'product'})
+products_in_compagin_2018=(pd.merge(data_bread[['Best.nr', 'product', 'year', 'week']], weekly_compagine_2018, on=['Best.nr', 'year', 'week'], how='right').drop_duplicates().sort_values(by='week')
+                             .dropna()[['product_x', 'year', 'week']].rename(columns={'product_x':'product'}))
 products_in_compagin_2019=pd.merge(data_bread[['Best.nr', 'product', 'year', 'week']], weekly_compagine_2019, left_on=['product', 'year', 'week'], right_on = ['correct_name', 'year', 'week'], how='right')\
     [['correct_name', 'year', 'week']].drop_duplicates().sort_values(by=['year', 'week']).reset_index(drop=True).rename(columns={'correct_name': 'product'})
 products_in_compagin = pd.concat([products_in_compagin_2018, products_in_compagin_2019]).reset_index(drop=True)
@@ -54,8 +53,35 @@ for i in range(len(products_in_compagin['product'])):
     print("Number of iteration: %s"%i)
 data_bread.loc[data_bread['in_promotion'] != True, 'in_promotion'] = False
 # show all promotions data_bread[data_bread['in_promotion']==True]
-data_bread = data_bread.groupby(['product', 'category', 'under_category', 'sub_category', 'store', 'week', 'year', 'in_promotion'])\
-    ['turnover', 'number_products_sold', 'number_products_sold_compagine', 'westage'].sum().reset_index()
+data_bread = (data_bread.groupby(['product', 'category', 'under_category', 'sub_category', 'store', 'week', 'year', 'in_promotion'])
+                                 ['turnover', 'number_products_sold', 'number_products_sold_compagine', 'westage'].sum().reset_index())
+# bread in promotion
+data_bread.loc[data_bread['number_products_sold_compagine']>0, 'compagin'] = True
+data_bread.loc[data_bread['number_products_sold_compagine']==0, 'compagin'] = False
+data_bread_compagin_n_prod=data_bread.groupby(['week', 'year'])['number_products_sold', 'number_products_sold_compagine'].sum().reset_index().sort_values(by=['year', 'week'])
+# data_bread_compagin=data_bread.groupby(['compagin', 'week', 'year'])['turnover'].sum().reset_index()
+# data_bread_compagin=(data_bread_compagin.pivot_table(index=['week', 'year'], columns='compagin', values='turnover').reset_index().sort_values(by=['year', 'week']))
+# data_bread_compagin.to_excel('output data/data_bread_compagin.xlsx')
+data_bread_compagin_n_prod.to_excel('output data/data_bread_compagin_n_prod.xlsx')
+
+# average weekly number of products sold in campaign and by regular price
+# choose only data for Meny totalt
+input('Remember about store name changing:')
+n_products_in_campaign=(data_bread[data_bread['store']=='Meny totalt'].groupby(['product', 'week', 'year'])['number_products_sold', "number_products_sold_compagine"].sum().reset_index()
+ .groupby('product')['number_products_sold', "number_products_sold_compagine"].mean().reset_index())
+n_products_in_campaign=(data_bread[data_bread['store']=='Meny totalt'].groupby(['product', 'week', 'year'])['number_products_sold', "number_products_sold_compagine"].sum().reset_index())
+
+n_products_in_campaign[n_products_in_campaign['product'].isin(products_in_compagin['product'].unique())].sort_values(by=['year', 'week']).to_excel('output data/n_products_in_campaign_bread_weeks.xlsx')
+
+# fruit & vegetables in promotion
+data_vegetables=data[data['category']=="Fersk frukt/grønt"].reset_index(drop=True)
+data_vegetables.loc[data_vegetables['number_products_sold_compagine']>0, 'compagin'] = True
+data_vegetables.loc[data_vegetables['number_products_sold_compagine']==0, 'compagin'] = False
+data_vegetables=data_vegetables.groupby(['compagin', 'week', 'year'])['turnover'].sum().reset_index()
+data_vegetables=(data_vegetables.pivot_table(index=['week', 'year'], columns='compagin', values='turnover')
+                                        .reset_index().sort_values(by=['year', 'week']))
+data_vegetables.to_excel('output data/data_vegetables_compagin.xlsx')
+
 
 kpi_1 = data_bread.groupby(['store', 'week', 'year', 'in_promotion'])['turnover'].sum().reset_index()
 kpi_1=pd.pivot_table(kpi_1, columns = ['in_promotion', 'store'] , index = ['week', 'year'], dropna=True).reset_index()
@@ -80,7 +106,6 @@ kpi_3.columns = kpi_3.columns.droplevel()
 kpi_3.columns = ['store', 'week', 'year', 'bread_category_no', 'bread_category_yes']
 kpi_3['share']=round(kpi_3['bread_category_yes']/(kpi_3['bread_category_no']+kpi_3['bread_category_yes']),4)
 kpi_3=kpi_3.sort_values(by=['store', 'year', 'week']).dropna()
-
 
 # share on the under category level
 for store in data_bread['store'].unique():
@@ -118,8 +143,6 @@ fig.set_size_inches(20, 10)
 fig.tight_layout()
 fig.savefig("plots/test.png", dpi=200, pad_inches=0.5)
 
-
-
 prs = Presentation('C:\\Users\\PC1\\Dropbox (BigBlue&Company)\\ETC Insight\\Projects\\Meny Analysis\\presentation\\BigBlue_main_template.pptx')
 # slide #1
 slide = prs.slides.add_slide(prs.slide_layouts[2]) # add new slide with previous defined layout, define the number of presentation layout
@@ -145,7 +168,7 @@ for sub_cat in sub_cat_list:
     p.font.size = Pt(10)
     p.level = 1
 # slide #3 and others
-for compagine_product in weekly_compagine['product'].unique():
+for compagine_product in weekly_compagine_2018['product'].unique():
     simmilar_product = data_bread['product'][data_bread['product'].str.contains(compagine_product)].unique()
 
     slide = prs.slides.add_slide(prs.slide_layouts[2])  # add new slide with previous defined layout, define the number of presentation layout

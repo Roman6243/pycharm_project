@@ -3,7 +3,6 @@ from dfcleaner import cleaner
 from docx import Document
 from docx.oxml.shared import OxmlElement, qn
 from docx.shared import Pt
-from docx.shared import Inches
 import numpy as np
 import requests
 import os
@@ -11,7 +10,7 @@ os.chdir(r'C:\Users\PC1\Dropbox (BigBlue&Company)\ETC Insight\Projects\Maxbo Rep
 pd.set_option('display.max_columns', 30)
 pd.set_option('display.width', 1000)
 
-last_week_dates = pd.date_range(start='2020-03-09', end='2020-03-14', freq='D').strftime(date_format='%Y-%m-%d')
+last_week_dates = pd.date_range(start='2020-03-16', end='2020-03-22', freq='D').strftime(date_format='%Y-%m-%d')
 data = pd.DataFrame()
 for date in last_week_dates:
     activity=requests.get("https://maxbo.link.express/external/api/v2/5d02982d29512bcc1729bb3964efb830/activity/query/?activity_date="+date+"T00:00:00&store_alias=ALL").json()
@@ -64,34 +63,24 @@ store_rename = pd.read_csv('C:/Users/PC1/Dropbox (BigBlue&Company)/ETC Insight/P
 calendar_weeks = pd.read_excel('C:/Users/PC1/Dropbox (BigBlue&Company)/ETC Insight/Projects/Maxbo_4 (python script)/input_files/calendar weeks.xlsx', parse_dates=['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'], date_parser=dateparse)
 calendar_weeks = calendar_weeks.melt(id_vars = ['Calendar week', 'Year'], value_vars = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'], var_name = 'Day', value_name='Date')
 calendar_weeks = calendar_weeks.rename(columns = {'Calendar week': 'calendar_week', 'Year': 'calendar_year', 'Date':'date', 'Day':'calendar_day'})
-store_info = pd.read_excel('C:/Users/PC1/Dropbox (BigBlue&Company)/ETC Insight/Projects/Maxbo_4 (python script)/input_files/stores_info.xlsx')
+"""
+ALL COUNTERS ALL SALES
+"""
+store_info = pd.read_excel('C:/Users/PC1/Dropbox (BigBlue&Company)/ETC Insight/Projects/Maxbo_4 (python script)/input_files/stores_info.xlsx', sheet_name='Sheet1')
 sales_counters = store_info[['store id', 'store_name', 'entrance name', 'type_counter', 'nr_counter', 'ip', 'counters_used', 'type_sales']]
 sales_group = store_info[['store_name', 'type_sales', 'cr_group']].drop_duplicates()
 
-# working hours formatting start
-working_hours = store_info[['store_name', 'MT_From', 'MT_To', 'F_From', 'F_To', 'S_From', 'S_To']].drop_duplicates()
-working_hours = working_hours.melt(id_vars='store_name', value_vars=['MT_From', 'MT_To', 'F_From', 'F_To', 'S_From', 'S_To'], value_name='hour', var_name='day_time')
-working_hours = working_hours.fillna(0)
-working_hours[['hour','min']]  = working_hours['hour'].astype(str).str.split(':', expand = True)
-working_hours['min'] = working_hours['min'].fillna('0').astype(int)
-working_hours['hour'] = working_hours['hour'].astype(int) + 1
-working_hours = working_hours.drop(columns='min')
-working_hours = pd.pivot_table(working_hours, index='store_name', columns='day_time').reset_index()
-working_hours.columns = working_hours.columns.droplevel()
-working_hours.columns = ['store_name', 'F_From', 'F_To', 'MT_From', 'MT_To', 'S_From', 'S_To']
-# working hours formatting end
-
 start = '2020-01-06'
-end = '2020-03-14'
+end = '2020-03-22'
 
 date_start=pd.date_range(start=start, end=end, freq='W-MON').strftime(date_format='%Y-%m-%d')
-date_end=pd.date_range(start=start, end=end, freq='W-SAT').strftime(date_format='%Y-%m-%d')
+date_end=pd.date_range(start=start, end=end, freq='W-SUN').strftime(date_format='%Y-%m-%d')
 
-data_sales_all = pd.DataFrame()
+data_sales_all=data_traffic_all = pd.DataFrame()
 data_traffic_all = pd.DataFrame()
 for next_date in range(len(date_start)):
     sales_req = requests.get("https://maxbo.link.express/external/api/v2/5d02982d29512bcc1729bb3964efb830/receipts/query/?store_alias=all&start_date=" +
-                        date_start[next_date] + "T06:00:00&end_date=" + date_end[next_date] + "T23:00:00").json()
+                        date_start[next_date] + "T00:01:00&end_date=" + date_end[next_date] + "T23:59:00").json()
     data_sales  = pd.DataFrame()
     for j in range(len(sales_req['store'])):
         store_name = sales_req['store'][j]['store_name']
@@ -107,7 +96,7 @@ for next_date in range(len(date_start)):
 
     ### traffic data
     traffic_req = requests.get('https://maxbo.retailflux.com/traffic/api/v2/json/487A27B9BC3E29038F7E813365A417B1/query/?store_alias=all&start_date=' +
-                         date_start[next_date] + "T06:00:00&end_date="+ date_end[next_date] + "T23:00:00").json()
+                         date_start[next_date] + "T07:00:00&end_date="+ date_end[next_date] + "T23:00:00").json()
     data_traffic = pd.DataFrame()
     for j in range(len(traffic_req['command_output']['store_camera_list'])):
         store_name = traffic_req['command_output']['store_camera_list'][j]['name']
@@ -126,29 +115,23 @@ for next_date in range(len(date_start)):
     # store renaming
     for r in range(len(store_rename)):  data_traffic.loc[data_traffic['store_name'] == store_rename['It is'][r], 'store_name'] = store_rename['Should be'][r]
     data_traffic['hour'] = data_traffic['datetime'].dt.hour
+    data_traffic = data_traffic[data_traffic['hour'].isin(range(7,24))]
     data_traffic['weekday'] = data_traffic['datetime'].dt.weekday
     data_traffic['year'] = data_traffic['datetime'].dt.year
     data_traffic['week'] = data_traffic['datetime'].dt.weekofyear
     data_traffic['date'] = data_traffic['datetime'].dt.normalize()
     data_traffic['weekdayname'] = data_traffic['datetime'].dt.strftime('%A')
-    data_traffic = pd.merge(data_traffic, working_hours, on = 'store_name')
-    # # select only work hours
-    data_traffic.loc[(data_traffic['hour'] >= data_traffic['MT_From']) & (data_traffic['hour'] <= data_traffic['MT_To']) &
-                     (data_traffic['weekday'] >= 0) & (data_traffic['weekday'] <= 3), 'open'] = True
-    data_traffic.loc[(data_traffic['hour'] >= data_traffic['F_From']) & (data_traffic['hour'] <= data_traffic['F_To']) &
-                     (data_traffic['weekday'] == 4), 'open'] = True
-    data_traffic.loc[(data_traffic['hour'] >= data_traffic['S_From']) & (data_traffic['hour'] <= data_traffic['S_To']) &
-                     (data_traffic['weekday'] == 5), 'open'] = True
-    data_traffic = data_traffic[data_traffic['open'] == True] # choose only working hours
+
     data_traffic = pd.merge(data_traffic, sales_counters, on = ['ip', 'store_name', 'type_counter'], how='left')
     data_traffic = pd.merge(data_traffic, calendar_weeks, on = 'date', how = 'left')
     data_traffic_all = pd.concat([data_traffic_all, data_traffic])
     print('The start point is %s'%date_start[next_date])
+    print('The start point is %s' % date_end[next_date])
 
 data_traffic =  data_traffic_all[['people_in','store_name', 'type_counter', 'hour', 'year', 'week', 'date', 'weekdayname','counters_used', 'calendar_year']].dropna() # as Maxbo Nittedal has counter 172.16.164.123 which is not defined
 data_sales_date = data_sales_all.groupby(['store_name', 'date', 'type_sales'])['count'].sum().reset_index()
 data_sales_date["day_name"] = data_sales_date['date'].dt.strftime('%A')
-data_sales_date = data_sales_date[data_sales_date['day_name'] != "Sunday"] # stores are closed on Sunday's
+# data_sales_date = data_sales_date[data_sales_date['day_name'] != "Sunday"] # stores are closed on Sunday's
 data_sales_date = pd.pivot_table(data_sales_date, index=['store_name', 'date'], columns='type_sales', fill_value=0).reset_index()
 data_sales_date.columns = data_sales_date.columns.droplevel()
 data_sales_date.columns = ['store', 'date', 'pos', 'sales']
@@ -163,14 +146,16 @@ conversion_rate = pd.merge(data_sales_date, data_traffic_date, left_on=['store',
 # traffic data contains NA's
 # explanation: transaction data were send before people counters were installed ['MAXBO SØRUMSAND', 'MAXBO IDEBYGG AS', 'MAXBO MANDAL', 'MAXBO NOTODDEN', 'MAXBO SKANSEN', 'MAXBO SLEMMESTAD', 'MAXBO TRYSIL']
 conversion_rate = conversion_rate.replace(np.inf, np.nan).dropna() # as the number transactions and visitors are equal zero we must delete them!
-conversion_rate=conversion_rate[conversion_rate['people_in'] != 0]
 conversion_rate['week'] = conversion_rate['date'].dt.week
 conversion_rate['month'] = conversion_rate['date'].dt.strftime('%B')
 conversion_rate = pd.merge(conversion_rate, calendar_weeks, on='date', how='left')
 conversion_rate = conversion_rate.groupby(['store', 'week', 'calendar_year', 'month'], as_index = False).agg({"transactions":"sum", "people_in": "sum"}).sort_values(['calendar_year', 'week'])
 conversion_rate['conversion_rate'] = round(conversion_rate['transactions']/conversion_rate['people_in'], 4) # contains NANs
+conversion_rate=conversion_rate[conversion_rate['people_in'] != 0]
+conversion_rate.dropna(inplace=True)
+conversion_rate=conversion_rate[conversion_rate['conversion_rate'] <=2]
 
-today_week=11
+today_week=12
 today_month='March'
 cumulative_weeks="Conversion rate (week 1-"+str(today_week-1)+')'
 current_week="Conversion rate (week "+str(today_week)+')'
@@ -246,4 +231,4 @@ for region in sorted(activities['region_name'].unique()):
         if i< len(activities_no):
             row_cells[2].text=str(activities_no['store_name'].values[i])
     document.add_paragraph(text='\n')
-document.save('output/Maxbo Report Week 11.docx')
+document.save('output/Maxbo Report Week 12.docx')
