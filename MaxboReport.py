@@ -10,7 +10,7 @@ os.chdir(r'C:\Users\PC1\Dropbox (BigBlue&Company)\ETC Insight\Projects\Maxbo Rep
 pd.set_option('display.max_columns', 30)
 pd.set_option('display.width', 1000)
 
-last_week_dates = pd.date_range(start='2020-03-16', end='2020-03-22', freq='D').strftime(date_format='%Y-%m-%d')
+last_week_dates = pd.date_range(start='2020-03-23', end='2020-03-29', freq='D').strftime(date_format='%Y-%m-%d')
 data = pd.DataFrame()
 for date in last_week_dates:
     activity=requests.get("https://maxbo.link.express/external/api/v2/5d02982d29512bcc1729bb3964efb830/activity/query/?activity_date="+date+"T00:00:00&store_alias=ALL").json()
@@ -60,7 +60,8 @@ def shade_cells(cells, shade):
 dateparse = lambda x: pd.datetime.strptime(x, '%Y-%m-%d %H:%M:%S')
 excluded_counter = pd.read_csv('C:/Users/PC1/Dropbox (BigBlue&Company)/ETC Insight/Projects/Maxbo_4 (python script)/input_files/excluded_counters.csv')
 store_rename = pd.read_csv('C:/Users/PC1/Dropbox (BigBlue&Company)/ETC Insight/Projects/Maxbo_4 (python script)/input_files/store renaming.csv')
-calendar_weeks = pd.read_excel('C:/Users/PC1/Dropbox (BigBlue&Company)/ETC Insight/Projects/Maxbo_4 (python script)/input_files/calendar weeks.xlsx', parse_dates=['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'], date_parser=dateparse)
+calendar_weeks = pd.read_excel('C:/Users/PC1/Dropbox (BigBlue&Company)/ETC Insight/Projects/Maxbo_4 (python script)/input_files/calendar weeks.xlsx',
+                               parse_dates=['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])
 calendar_weeks = calendar_weeks.melt(id_vars = ['Calendar week', 'Year'], value_vars = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'], var_name = 'Day', value_name='Date')
 calendar_weeks = calendar_weeks.rename(columns = {'Calendar week': 'calendar_week', 'Year': 'calendar_year', 'Date':'date', 'Day':'calendar_day'})
 """
@@ -71,7 +72,7 @@ sales_counters = store_info[['store id', 'store_name', 'entrance name', 'type_co
 sales_group = store_info[['store_name', 'type_sales', 'cr_group']].drop_duplicates()
 
 start = '2020-01-06'
-end = '2020-03-22'
+end = '2020-03-29'
 
 date_start=pd.date_range(start=start, end=end, freq='W-MON').strftime(date_format='%Y-%m-%d')
 date_end=pd.date_range(start=start, end=end, freq='W-SUN').strftime(date_format='%Y-%m-%d')
@@ -127,6 +128,7 @@ for next_date in range(len(date_start)):
     data_traffic_all = pd.concat([data_traffic_all, data_traffic])
     print('The start point is %s'%date_start[next_date])
     print('The start point is %s' % date_end[next_date])
+    print('\n')
 
 data_traffic =  data_traffic_all[['people_in','store_name', 'type_counter', 'hour', 'year', 'week', 'date', 'weekdayname','counters_used', 'calendar_year']].dropna() # as Maxbo Nittedal has counter 172.16.164.123 which is not defined
 data_sales_date = data_sales_all.groupby(['store_name', 'date', 'type_sales'])['count'].sum().reset_index()
@@ -149,23 +151,27 @@ conversion_rate = conversion_rate.replace(np.inf, np.nan).dropna() # as the numb
 conversion_rate['week'] = conversion_rate['date'].dt.week
 conversion_rate['month'] = conversion_rate['date'].dt.strftime('%B')
 conversion_rate = pd.merge(conversion_rate, calendar_weeks, on='date', how='left')
-conversion_rate = conversion_rate.groupby(['store', 'week', 'calendar_year', 'month'], as_index = False).agg({"transactions":"sum", "people_in": "sum"}).sort_values(['calendar_year', 'week'])
+conversion_rate_w = conversion_rate.groupby(['store', 'week', 'calendar_year'], as_index = False).agg({"transactions":"sum", "people_in": "sum"}).rename(columns={'week':'label'})
+conversion_rate_m = conversion_rate.groupby(['store', 'month', 'calendar_year'], as_index = False).agg({"transactions":"sum", "people_in": "sum"}).rename(columns={'month':'label'})
+conversion_rate = pd.concat([conversion_rate_w, conversion_rate_m])
 conversion_rate['conversion_rate'] = round(conversion_rate['transactions']/conversion_rate['people_in'], 4) # contains NANs
-conversion_rate=conversion_rate[conversion_rate['people_in'] != 0]
+# conversion_rate=conversion_rate[conversion_rate['people_in'] != 0]
 conversion_rate.dropna(inplace=True)
-conversion_rate=conversion_rate[conversion_rate['conversion_rate'] <=2]
+# conversion_rate=conversion_rate[conversion_rate['conversion_rate'] >2]
 
-today_week=12
+today_week=13
+last_weeks = range(today_week)
 today_month='March'
+last_months=['January', 'February']
 cumulative_weeks="Conversion rate (week 1-"+str(today_week-1)+')'
 current_week="Conversion rate (week "+str(today_week)+')'
 cumulative_months="Conversion rate (Jan-Feb)"
 current_month="Conversion rate (Mar)"
 
-conversion_rate_last_weeks = conversion_rate[conversion_rate['week'] < today_week][['store','conversion_rate']].groupby('store').mean().reset_index().rename(columns={'conversion_rate': cumulative_weeks})
-conversion_rate_last_months = conversion_rate[conversion_rate['month'] != today_month].groupby('store')['conversion_rate'].mean().reset_index().rename(columns={'conversion_rate': cumulative_months})
-conversion_rate_current_week = conversion_rate[conversion_rate['week'] == today_week][['store','conversion_rate']].rename(columns={'conversion_rate': current_week})
-conversion_rate_current_month = conversion_rate[conversion_rate['month'] == today_month].groupby(['store'])['conversion_rate'].mean().reset_index().rename(columns={'conversion_rate': current_month})
+conversion_rate_last_weeks = conversion_rate[conversion_rate['label'].isin(last_weeks)][['store','conversion_rate']].groupby('store').mean().reset_index().rename(columns={'conversion_rate': cumulative_weeks})
+conversion_rate_last_months = conversion_rate[conversion_rate['label'].isin(last_months)].groupby('store')['conversion_rate'].mean().reset_index().rename(columns={'conversion_rate': cumulative_months})
+conversion_rate_current_week = conversion_rate[conversion_rate['label'] == today_week][['store','conversion_rate']].rename(columns={'conversion_rate': current_week})
+conversion_rate_current_month = conversion_rate[conversion_rate['label'] == today_month].groupby(['store'])['conversion_rate'].mean().reset_index().rename(columns={'conversion_rate': current_month})
 store_development = pd.merge(conversion_rate_current_week, conversion_rate_last_weeks, on='store')
 store_development = pd.merge(store_development, conversion_rate_last_months, on='store')
 store_development = pd.merge(store_development, conversion_rate_current_month, on='store')
@@ -231,4 +237,4 @@ for region in sorted(activities['region_name'].unique()):
         if i< len(activities_no):
             row_cells[2].text=str(activities_no['store_name'].values[i])
     document.add_paragraph(text='\n')
-document.save('output/Maxbo Report Week 12.docx')
+document.save('output/Maxbo Report Week 13.docx')
