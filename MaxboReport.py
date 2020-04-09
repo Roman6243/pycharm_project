@@ -10,7 +10,7 @@ os.chdir(r'C:\Users\PC1\Dropbox (BigBlue&Company)\ETC Insight\Projects\Maxbo Rep
 pd.set_option('display.max_columns', 30)
 pd.set_option('display.width', 1000)
 
-last_week_dates = pd.date_range(start='2020-03-23', end='2020-03-29', freq='D').strftime(date_format='%Y-%m-%d')
+last_week_dates = pd.date_range(start='2020-03-30', end='2020-04-05', freq='D').strftime(date_format='%Y-%m-%d')
 data = pd.DataFrame()
 for date in last_week_dates:
     activity=requests.get("https://maxbo.link.express/external/api/v2/5d02982d29512bcc1729bb3964efb830/activity/query/?activity_date="+date+"T00:00:00&store_alias=ALL").json()
@@ -58,21 +58,21 @@ def shade_cells(cells, shade):
         tcPr.append(tcVAlign)
 
 dateparse = lambda x: pd.datetime.strptime(x, '%Y-%m-%d %H:%M:%S')
-excluded_counter = pd.read_csv('C:/Users/PC1/Dropbox (BigBlue&Company)/ETC Insight/Projects/Maxbo_4 (python script)/input_files/excluded_counters.csv')
-store_rename = pd.read_csv('C:/Users/PC1/Dropbox (BigBlue&Company)/ETC Insight/Projects/Maxbo_4 (python script)/input_files/store renaming.csv')
-calendar_weeks = pd.read_excel('C:/Users/PC1/Dropbox (BigBlue&Company)/ETC Insight/Projects/Maxbo_4 (python script)/input_files/calendar weeks.xlsx',
+excluded_counter = pd.read_csv('C:/Users/PC1/Dropbox (BigBlue&Company)/ETC Insight/Projects/Maxbo Dashboard (.py)/input_files/excluded_counters.csv')
+store_rename = pd.read_csv('C:/Users/PC1/Dropbox (BigBlue&Company)/ETC Insight/Projects/Maxbo Dashboard (.py)/input_files/store renaming.csv')
+calendar_weeks = pd.read_excel('C:/Users/PC1/Dropbox (BigBlue&Company)/ETC Insight/Projects/Maxbo Dashboard (.py)/input_files/calendar weeks.xlsx',
                                parse_dates=['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])
 calendar_weeks = calendar_weeks.melt(id_vars = ['Calendar week', 'Year'], value_vars = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'], var_name = 'Day', value_name='Date')
 calendar_weeks = calendar_weeks.rename(columns = {'Calendar week': 'calendar_week', 'Year': 'calendar_year', 'Date':'date', 'Day':'calendar_day'})
 """
 ALL COUNTERS ALL SALES
 """
-store_info = pd.read_excel('C:/Users/PC1/Dropbox (BigBlue&Company)/ETC Insight/Projects/Maxbo_4 (python script)/input_files/stores_info.xlsx', sheet_name='Sheet1')
+store_info = pd.read_excel('C:/Users/PC1/Dropbox (BigBlue&Company)/ETC Insight/Projects/Maxbo Dashboard (.py)/input_files/stores_info.xlsx', sheet_name='Sheet1')
 sales_counters = store_info[['store id', 'store_name', 'entrance name', 'type_counter', 'nr_counter', 'ip', 'counters_used', 'type_sales']]
 sales_group = store_info[['store_name', 'type_sales', 'cr_group']].drop_duplicates()
 
 start = '2020-01-06'
-end = '2020-03-29'
+end = '2020-04-05'
 
 date_start=pd.date_range(start=start, end=end, freq='W-MON').strftime(date_format='%Y-%m-%d')
 date_end=pd.date_range(start=start, end=end, freq='W-SUN').strftime(date_format='%Y-%m-%d')
@@ -159,14 +159,14 @@ conversion_rate['conversion_rate'] = round(conversion_rate['transactions']/conve
 conversion_rate.dropna(inplace=True)
 # conversion_rate=conversion_rate[conversion_rate['conversion_rate'] >2]
 
-today_week=13
+today_week=14
 last_weeks = range(today_week)
-today_month='March'
-last_months=['January', 'February']
+today_month='April'
+last_months=['January', 'February', 'March']
 cumulative_weeks="Conversion rate (week 1-"+str(today_week-1)+')'
 current_week="Conversion rate (week "+str(today_week)+')'
-cumulative_months="Conversion rate (Jan-Feb)"
-current_month="Conversion rate (Mar)"
+cumulative_months="Conversion rate (Jan-Mar)"
+current_month="Conversion rate (Apr)"
 
 conversion_rate_last_weeks = conversion_rate[conversion_rate['label'].isin(last_weeks)][['store','conversion_rate']].groupby('store').mean().reset_index().rename(columns={'conversion_rate': cumulative_weeks})
 conversion_rate_last_months = conversion_rate[conversion_rate['label'].isin(last_months)].groupby('store')['conversion_rate'].mean().reset_index().rename(columns={'conversion_rate': cumulative_months})
@@ -237,4 +237,4 @@ for region in sorted(activities['region_name'].unique()):
         if i< len(activities_no):
             row_cells[2].text=str(activities_no['store_name'].values[i])
     document.add_paragraph(text='\n')
-document.save('output/Maxbo Report Week 13.docx')
+document.save('output/Maxbo Report Week 14.docx')
