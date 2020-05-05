@@ -10,7 +10,7 @@ os.chdir(r'C:\Users\PC1\Dropbox (BigBlue&Company)\ETC Insight\Projects\Maxbo Rep
 pd.set_option('display.max_columns', 30)
 pd.set_option('display.width', 1000)
 
-last_week_dates = pd.date_range(start='2020-03-30', end='2020-04-05', freq='D').strftime(date_format='%Y-%m-%d')
+last_week_dates = pd.date_range(start='2020-04-13', end='2020-04-19', freq='D').strftime(date_format='%Y-%m-%d')
 data = pd.DataFrame()
 for date in last_week_dates:
     activity=requests.get("https://maxbo.link.express/external/api/v2/5d02982d29512bcc1729bb3964efb830/activity/query/?activity_date="+date+"T00:00:00&store_alias=ALL").json()
@@ -72,7 +72,7 @@ sales_counters = store_info[['store id', 'store_name', 'entrance name', 'type_co
 sales_group = store_info[['store_name', 'type_sales', 'cr_group']].drop_duplicates()
 
 start = '2020-01-06'
-end = '2020-04-05'
+end = '2020-04-19'
 
 date_start=pd.date_range(start=start, end=end, freq='W-MON').strftime(date_format='%Y-%m-%d')
 date_end=pd.date_range(start=start, end=end, freq='W-SUN').strftime(date_format='%Y-%m-%d')
@@ -159,7 +159,7 @@ conversion_rate['conversion_rate'] = round(conversion_rate['transactions']/conve
 conversion_rate.dropna(inplace=True)
 # conversion_rate=conversion_rate[conversion_rate['conversion_rate'] >2]
 
-today_week=14
+today_week=16
 last_weeks = range(today_week)
 today_month='April'
 last_months=['January', 'February', 'March']
@@ -237,4 +237,4 @@ for region in sorted(activities['region_name'].unique()):
         if i< len(activities_no):
             row_cells[2].text=str(activities_no['store_name'].values[i])
     document.add_paragraph(text='\n')
-document.save('output/Maxbo Report Week 14.docx')
+document.save('output/Maxbo Report Week 16.docx')
